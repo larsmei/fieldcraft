@@ -58,5 +58,15 @@
   "ui.colour_vision_deutan": "Deuteranopia (no green cones)",
   "ui.colour_vision_deutan_tip": "Status and result colours chosen to stay apart without green cones",
   "ui.colour_vision_tritan": "Tritanopia (no blue cones)",
-  "ui.colour_vision_tritan_tip": "Status and result colours chosen to stay apart without blue cones"
+  "ui.colour_vision_tritan_tip": "Status and result colours chosen to stay apart without blue cones",
+  "links.donate_label": "Donate",
+  "links.donate_tip": "Support FieldCraft's development with a donation on Ko-fi",
+  "links.donate_hide_tip": "Hide the Donate button",
+  "links.donate_name": "Donate",
+  "links.donate_hide_name": "Hide the Donate button",
+  "links.discord_label": "Discord",
+  "links.discord_tip": "Talk with other users and the developers on Discord",
+  "links.discord_hide_tip": "Hide the Discord button",
+  "links.discord_name": "Discord",
+  "links.discord_hide_name": "Hide the Discord button"
 }
