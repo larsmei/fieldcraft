@@ -42,7 +42,7 @@ step lists the thermal and the mechanical conditions together and is solved by `
 |---|---|---|---|
 | `step` | step name | the only heat transfer step | |
 | `max_dofs` | 1 to 6 000 000 | 6 000 000 | cap on the temperatures; may only be lowered |
-| `max_factor_entries` | 1 to 2 000 000 000 | 400 000 000 | as for `solve.static` ([Linear solvers](linear-solvers.md#memory-limits)) |
+| `max_factor_entries` | 1 to 32 000 000 000 on 64-bit | 400 000 000 | as for `solve.static` ([Linear solvers](linear-solvers.md#memory-limits)) |
 | `threads` | 1 to 256 | the session's | changes the time, never the result |
 
 ### Transient integration (`procedure.transient`)

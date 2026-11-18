@@ -778,7 +778,10 @@ mod tests {
     #[test]
     fn raised_factor_budget_keeps_the_lanczos_vector_limit() {
         let neq = Limits::MAX_DOFS;
-        for (entries, expected) in [(400_000_000, 33), (2_000_000_000, 166)] {
+        let mut cases = vec![(400_000_000usize, 33usize), (2_000_000_000, 166)];
+        #[cfg(target_pointer_width = "64")]
+        cases.push((32_000_000_000, 2666));
+        for (entries, expected) in cases {
             let limits = Limits { max_factor_entries: entries, ..Limits::default() };
             let vectors = lanczos_basis(&limits, neq);
             assert_eq!(vectors, expected);

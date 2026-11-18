@@ -29,7 +29,7 @@ threads with the same result as on one.
 
 | Field | Value | Default | Meaning |
 |---|---|---|---|
-| `max_factor_entries` | 1 to 2 000 000 000 | 400 000 000 | cap on the entries of the factor L (8 bytes each); may be raised deliberately for one solve |
+| `max_factor_entries` | 1 to 32 000 000 000 on 64-bit (2 000 000 000 on 32-bit) | 400 000 000 | cap on the entries of the factor L (8 bytes each); may be raised deliberately for one solve |
 | `max_dofs` | 1 to 6 000 000 | 6 000 000 | cap on the model's unknowns; may only be lowered |
 | `max_iterations` | 1 to 3000 | 3000 | frequency and buckling: cap on the Lanczos vectors; may only be lowered |
 | `threads` | 1 to 256 | the session's (`FIELDCRAFT_THREADS` or the cores) | changes the time, never the result |
@@ -166,11 +166,12 @@ not to be positive definite, LDLᵀ on the same symbolic factorization.
 
 `solve.static`, `solve.nonlinear`, `solve.heat`, `solve.frequency` and `solve.buckle` accept
 `max_factor_entries`: 400 000 000 by default, or an explicit whole number from 1 to
-2 000 000 000. `{"step": "Load", "max_factor_entries": 500000000}` deliberately raises the cap
+32 000 000 000 on 64-bit (2 000 000 000 on 32-bit and the web build). `{"step": "Load", "max_factor_entries": 500000000}` deliberately raises the cap
 for that solve; it does not change the default of later solves. The other work and iteration caps
 can only be lowered.
 
-Each factor value is 8 bytes: the default allows 3.2 GB of values, and the ceiling 16 GB. These
+Each factor value is 8 bytes: the default allows 3.2 GB of values, and the 64-bit ceiling
+256 GB (32 billion entries). These
 are factor values alone, not total RAM: indices, assembled matrices, numeric workspace and other
 solver storage need additional memory. Raising the cap neither reserves memory nor guarantees
 that it is available. A factor over the cap is reported before its values are allocated, with the
@@ -191,7 +192,7 @@ The same entry budget guards two more stores:
   than …").
 - **The Lanczos basis** (vectors and their mass products, 2 n × vectors): at most
   `max_factor_entries` / (2 n) vectors, within `max_iterations`. At 6 000 000 equations this is 33
-  vectors with the default cap and 166 at the ceiling.
+  vectors with the default cap and 2666 at the 64-bit ceiling.
 
 ## Algorithm
 

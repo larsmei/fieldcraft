@@ -46,7 +46,7 @@ small negative shift automatically, so its rigid-body modes come out at zero fre
 | `mass` | `consistent`, `lumped` | `consistent` | the mass matrix |
 | `shift` | finite, eigenvalue units (rad per time unit)² | 0 for a supported structure, −10⁻⁶ Σ K_ii / Σ M_ii for a free one | the spectral shift σ; it must lie below every eigenvalue of the free equations |
 | `max_dofs` | 1 to 6 000 000 | 6 000 000 | may only be lowered |
-| `max_factor_entries` | 1 to 2 000 000 000 | 400 000 000 | factor entries; also bounds the Lanczos basis ([Linear solvers](linear-solvers.md#memory-limits)) |
+| `max_factor_entries` | 1 to 32 000 000 000 on 64-bit | 400 000 000 | factor entries; also bounds the Lanczos basis ([Linear solvers](linear-solvers.md#memory-limits)) |
 | `max_iterations` | 1 to 3000 | 3000 | cap on the Lanczos vectors (iterations × block size); may only be lowered |
 | `threads` | 1 to 256 | the session's | changes the time, never the result |
 

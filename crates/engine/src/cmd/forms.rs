@@ -2757,7 +2757,7 @@ const STEP: Field = reference("step", "Step", C::Step).help("The step to solve; 
 const SOLVED: Field = reference("step", "Step", C::SolvedStep).help("The solved step; the step shown when empty.").hint("the step shown");
 const MAX_DOFS: Field = int("max_dofs", "Max DOFs", 1, 6_000_000).help("Cap on the degrees of freedom solved.").hint("6000000");
 const MAX_FACTOR: Field = int("max_factor_entries", "Max factor entries", 1, super::solve::FACTOR_ENTRY_CEILING as i64)
-    .help("Cap on factor entries (8 bytes each): 400M by default; raise deliberately up to 2B (16 GB of values alone). Indices, workspace and other solver storage need additional memory.")
+    .help("Cap on factor entries (8 bytes each): 400M by default; raise deliberately up to 32 billion entries (256 GB of values alone) on 64-bit, or 2 billion on 32-bit and the web build. Indices, workspace and other solver storage need additional memory.")
     .hint("400000000");
 const THREADS: Field = int("threads", "Threads", 1, 256).help("Threads to use; the session's setting when empty.").hint("the session's");
 

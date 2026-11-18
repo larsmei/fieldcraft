@@ -37,7 +37,7 @@ of threads.
 |---|---|---|---|
 | `step` | step name | the only static or coupled step | the step to solve; with several such steps and none named: "name the step: the model has … steps …" |
 | `max_dofs` | 1 to 6 000 000 | 6 000 000 | cap on the model's unknowns; may only be lowered |
-| `max_factor_entries` | 1 to 2 000 000 000 | 400 000 000 | cap on the factor's entries (8 bytes each); may be raised for one solve ([Linear solvers](linear-solvers.md#memory-limits)) |
+| `max_factor_entries` | 1 to 32 000 000 000 on 64-bit | 400 000 000 | cap on the factor's entries (8 bytes each); may be raised for one solve ([Linear solvers](linear-solvers.md#memory-limits)) |
 | `threads` | 1 to 256 | the session's (`FIELDCRAFT_THREADS` or the cores) | changes the time, never the result |
 
 ### The step

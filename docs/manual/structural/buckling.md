@@ -45,7 +45,7 @@ The first `load_factor` in the reply times the applied loads is the critical loa
 |---|---|---|---|
 | `step` | step name | the only buckling step | |
 | `max_dofs` | 1 to 6 000 000 | 6 000 000 | may only be lowered |
-| `max_factor_entries` | 1 to 2 000 000 000 | 400 000 000 | factor entries, also bounding the Lanczos basis ([Linear solvers](linear-solvers.md#memory-limits)) |
+| `max_factor_entries` | 1 to 32 000 000 000 on 64-bit | 400 000 000 | factor entries, also bounding the Lanczos basis ([Linear solvers](linear-solvers.md#memory-limits)) |
 | `max_iterations` | 1 to 3000 | 3000 | cap on the Lanczos vectors; may only be lowered |
 | `threads` | 1 to 256 | the session's | changes the time, never the result |
 
