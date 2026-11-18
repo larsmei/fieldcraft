@@ -1,0 +1,98 @@
+# Fork build: Linux x86_64 and Windows x64 packages with the 256 GB factor ceiling.
+# GitHub-hosted runners only (the upstream release workflow's Blacksmith runners are not
+# available on this fork). Does not sign or notarize.
+name: Factor cap 256 GB
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: factor-256gb-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: Linux x86_64
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      CARGO_DEB_VERSION: 3.8.0
+      CARGO_GENERATE_RPM_VERSION: 0.21.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends desktop-file-utils lintian rpm
+      - uses: dtolnay/rust-toolchain@1.99.1
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: factor256-linux-x86_64
+      - name: Generate THIRD-PARTY-LICENSES.txt
+        run: cargo xtask licences
+      - name: Install cargo-deb and cargo-generate-rpm
+        run: |
+          cargo install --locked --version "$CARGO_DEB_VERSION" cargo-deb
+          cargo install --locked --version "$CARGO_GENERATE_RPM_VERSION" cargo-generate-rpm
+      - name: Build and package
+        run: packaging/linux/package.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-linux-x86_64
+          path: dist/release/*
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: factor256-windows-x64
+      - name: Generate THIRD-PARTY-LICENSES.txt
+        run: cargo xtask licences
+      - name: Build and package
+        shell: pwsh
+        run: ./packaging/windows/package.ps1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-windows-x64
+          path: dist/release/*
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eux
+          tag=v0.8.0-factor-256gb
+          gh release delete "$tag" --yes --cleanup-tag || true
+          gh release create "$tag" --target "${GITHUB_SHA}" --title "FieldCraft 0.8.0 (factor cap 256 GB)" --notes "$(cat <<'EOF'
+          Fork of [tangency-labs/fieldcraft](https://github.com/tangency-labs/fieldcraft) `develop`.
+
+          The implicit solver's `max_factor_entries` ceiling is **32 000 000 000** on 64-bit (256 GB of factor values, 8 bytes each). The default stays 400 000 000. 32-bit and the web build keep the upstream ceiling of 2 000 000 000, because that count does not fit in a 32-bit `usize`.
+
+          Set it on one solve, for example `solve.static` with `{"max_factor_entries": 32000000000}`. This does not reserve the memory. Linux and Windows builds are unsigned.
+          EOF
+          )" dist/*

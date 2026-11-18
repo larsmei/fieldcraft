@@ -57,7 +57,7 @@ Command `solve.nonlinear`:
 |---|---|---|---|
 | `step` | name | the only nonlinear static step | The step to solve. |
 | `max_dofs` | integer | 6 000 000 | Cap on degrees of freedom; may only be lowered. |
-| `max_factor_entries` | integer | 400 000 000 | Cap on factor entries; may be raised up to 2 000 000 000 (8 bytes per value). |
+| `max_factor_entries` | integer | 400 000 000 | Cap on factor entries; may be raised up to 32 000 000 000 on 64-bit (8 bytes per value, 256 GB). |
 | `max_newton_iterations` | integer | 100 000 | Cap on the Newton iterations of the whole step; may only be lowered. |
 | `threads` | 1 to 256 | the session's | Changes the time, never the result. |
 

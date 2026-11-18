@@ -33,7 +33,7 @@ pub const RUN: CommandSpec = CommandSpec {
 pub const STATIC: CommandSpec = CommandSpec {
     id: "solve.static",
     label: "Solve Static Step",
-    params: r#"{"step": "Load", "max_dofs": 6000000, "max_factor_entries": 400000000, "threads": 8} — solves a linear static or coupled temperature–displacement step (the only one when `step` is left out) and keeps the result in the session; `max_dofs` may only be lowered; `max_factor_entries` defaults to 400000000 and may be deliberately raised up to 2000000000 (8 bytes per factor value; indices and workspace are additional); `threads` (1 to 256, by default the session's: `FIELDCRAFT_THREADS` or the cores) changes only the time, never the result"#,
+    params: r#"{"step": "Load", "max_dofs": 6000000, "max_factor_entries": 400000000, "threads": 8} — solves a linear static or coupled temperature–displacement step (the only one when `step` is left out) and keeps the result in the session; `max_dofs` may only be lowered; `max_factor_entries` defaults to 400000000 and may be deliberately raised up to 32000000000 on 64-bit (256 GB of factor values, 8 bytes each; indices and workspace are additional; 32-bit and the web build stay at 2000000000); `threads` (1 to 256, by default the session's: `FIELDCRAFT_THREADS` or the cores) changes only the time, never the result"#,
     form: Some(super::forms::SOLVE_STATIC),
     kind: CommandKind::Model,
     requires: &[Requirement::Analysable, Requirement::ElementMaterial, Requirement::ElementSection, Requirement::Step],
@@ -131,6 +131,11 @@ pub const PROBE: CommandSpec = CommandSpec {
 };
 
 /// Largest explicit factor cap accepted by solve commands; the default remains 400M entries.
+/// 32e9 entries are 256 GB of factor values (8 bytes each). A 32-bit `usize` (the web build)
+/// cannot hold that, so those targets keep the previous 2B ceiling.
+#[cfg(target_pointer_width = "64")]
+pub(super) const FACTOR_ENTRY_CEILING: usize = 32_000_000_000;
+#[cfg(not(target_pointer_width = "64"))]
 pub(super) const FACTOR_ENTRY_CEILING: usize = 2_000_000_000;
 
 /// Most nodes one probe lists.
@@ -1784,13 +1789,22 @@ pub(crate) mod tests {
 
     #[test]
     fn factor_cap_can_be_raised_deliberately_to_a_finite_ceiling() {
+        let ceiling = FACTOR_ENTRY_CEILING as u64;
         assert_eq!(limits(&json!({})).unwrap(), Limits::default());
-        for entries in [1, 400_000_000, 400_000_001, 467_000_000, 2_000_000_000] {
-            assert_eq!(limits(&json!({"max_factor_entries": entries})).unwrap().max_factor_entries, entries);
+        for entries in [1, 400_000_000, 400_000_001, 467_000_000, 2_000_000_000, ceiling] {
+            assert_eq!(limits(&json!({"max_factor_entries": entries})).unwrap().max_factor_entries, entries as usize);
         }
-        for entries in
-            [json!(null), json!(true), json!("467000000"), json!(-1), json!(0), json!(2.5), json!(2_000_000_001u64), json!(u64::MAX), json!(1e300)]
-        {
+        for entries in [
+            json!(null),
+            json!(true),
+            json!("467000000"),
+            json!(-1),
+            json!(0),
+            json!(2.5),
+            json!(ceiling + 1),
+            json!(u64::MAX),
+            json!(1e300),
+        ] {
             assert!(limits(&json!({"max_factor_entries": entries})).is_err(), "{entries}");
         }
         for params in [
@@ -1804,7 +1818,7 @@ pub(crate) mod tests {
             let schema = crate::schema::json_schema(crate::find_command(id).unwrap().form.unwrap());
             let factor = &schema["properties"]["max_factor_entries"];
             assert_eq!(factor["minimum"], 1, "{id}: {factor}");
-            assert_eq!(factor["maximum"], 2_000_000_000u64, "{id}: {factor}");
+            assert_eq!(factor["maximum"], ceiling, "{id}: {factor}");
         }
     }
 
@@ -1832,14 +1846,14 @@ pub(crate) mod tests {
             let expected = s.execute(command, &json!({"step": step})).unwrap();
             let probe_params = json!({"step": step, "nodes": [6]});
             let probe = s.execute("solve.probe", &probe_params).unwrap();
-            for entries in [400_000_001, 467_000_000, 2_000_000_000] {
+            for entries in [400_000_001u64, 467_000_000, 2_000_000_000, FACTOR_ENTRY_CEILING as u64] {
                 assert_eq!(s.execute(command, &json!({"step": step, "max_factor_entries": entries})).unwrap(), expected);
                 assert_eq!(s.execute("solve.probe", &probe_params).unwrap(), probe);
             }
             let before = s.model.clone();
             let results = s.solved_steps().count();
             let journal = s.journal.len();
-            for entries in [json!(1), json!(0), json!(-1), json!(2.5), json!(null), json!(2_000_000_001u64), json!(u64::MAX)] {
+            for entries in [json!(1), json!(0), json!(-1), json!(2.5), json!(null), json!(FACTOR_ENTRY_CEILING as u64 + 1), json!(u64::MAX)] {
                 let e = s.execute(command, &json!({"step": step, "max_factor_entries": entries})).unwrap_err().to_string();
                 if entries == 1 {
                     assert!(e.contains("bytes of factor values alone") && e.contains("limit is 1 entries"), "{command}: {e}");
