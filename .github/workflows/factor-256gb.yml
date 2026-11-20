@@ -112,7 +112,7 @@ jobs:
 
   release:
     name: Publish GitHub release
-    needs: [linux, windows, macos]
+    needs: [linux, windows]
     if: inputs.only == 'all'
     runs-on: ubuntu-24.04
     steps:
@@ -126,10 +126,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eux
-          tag=v0.8.0-factor-256gb
+          tag=v0.8.1-factor-256gb
           gh release delete "$tag" --yes --cleanup-tag || true
-          gh release create "$tag" --target "${GITHUB_SHA}" --title "FieldCraft 0.8.0 (factor cap 256 GB)" --notes "$(cat <<'EOF'
-          Fork of [tangency-labs/fieldcraft](https://github.com/tangency-labs/fieldcraft) `develop`.
+          gh release create "$tag" --target "${GITHUB_SHA}" --title "FieldCraft 0.8.1 (factor cap 256 GB)" --notes "$(cat <<'EOF'
+          Fork of [tangency-labs/fieldcraft](https://github.com/tangency-labs/fieldcraft) `develop` at 0.8.1, plus the 64-bit factor ceiling.
 
           The implicit solver's `max_factor_entries` ceiling is **32 000 000 000** on 64-bit (256 GB of factor values, 8 bytes each). The default stays 400 000 000. 32-bit and the web build keep the upstream ceiling of 2 000 000 000, because that count does not fit in a 32-bit `usize`.
 
@@ -137,36 +137,24 @@ jobs:
 
           - Linux x86_64: `.tar.gz`, `.AppImage`, `.deb`, `.rpm` (glibc 2.35+, Ubuntu 22.04). Unsigned.
           - Windows x64: `.zip` with `fieldcraft.exe` and `fieldcraft-cli.exe`. Unsigned.
-          - macOS Apple silicon (arm64): `.dmg` and `fieldcraft-cli-*-macos-aarch64.zip`. Ad-hoc signed, not notarized. Gatekeeper blocks the first launch: right-click `FieldCraft.app` and choose **Open**, or run `xattr -dr com.apple.quarantine` on the app.
+          - macOS Apple silicon (arm64), when the runner accepts the job: `.dmg` and `fieldcraft-cli-*-macos-aarch64.zip`. Ad-hoc signed, not notarized. Gatekeeper blocks the first launch: right-click `FieldCraft.app` and choose **Open**, or run `xattr -dr com.apple.quarantine` on the app.
           EOF
           )" dist/*
 
   publish-macos:
     name: Add macOS arm64 to the release
-    needs: macos
-    if: inputs.only == 'macos'
+    needs: [macos, release]
+    if: always() && needs.macos.result == 'success' && (inputs.only == 'macos' || needs.release.result == 'success')
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: release-macos-aarch64
           path: dist
-      - name: Upload onto the existing release
+      - name: Upload onto the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eux
-          tag=v0.8.0-factor-256gb
+          tag=v0.8.1-factor-256gb
           gh release upload "$tag" dist/* --clobber
-          gh release edit "$tag" --notes "$(cat <<'EOF'
-          Fork of [tangency-labs/fieldcraft](https://github.com/tangency-labs/fieldcraft) `develop` (commit a63756b).
-
-          The implicit solver's `max_factor_entries` ceiling is **32 000 000 000** on 64-bit (256 GB of factor values, 8 bytes each). The default stays 400 000 000. 32-bit and the web build keep the upstream ceiling of 2 000 000 000, because that count does not fit in a 32-bit `usize`.
-
-          Set it on one solve, for example `solve.static` with `{"max_factor_entries": 32000000000}`. This does not reserve the memory.
-
-          - Linux x86_64: `.tar.gz`, `.AppImage`, `.deb`, `.rpm` (glibc 2.35+, Ubuntu 22.04). Unsigned.
-          - Windows x64: `.zip` with `fieldcraft.exe` and `fieldcraft-cli.exe`. Unsigned.
-          - macOS Apple silicon (arm64): `.dmg` and `fieldcraft-cli-*-macos-aarch64.zip`. Ad-hoc signed, not notarized. Gatekeeper blocks the first launch: right-click `FieldCraft.app` and choose **Open**, or run `xattr -dr com.apple.quarantine` on the app.
-          EOF
-          )"
