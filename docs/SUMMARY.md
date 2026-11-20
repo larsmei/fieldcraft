@@ -63,6 +63,8 @@
 - [Units inventory](units-inventory.md)
 - [Releasing](releasing.md)
 - [Libraries and licences](adr/0001-libraries.md)
+- [RFC 0001: High-frequency electromagnetics](rfc/0001-electromagnetics.md)
+- [RFC 0002: Port WARP3D's fracture capabilities](rfc/0002-warp3d-fracture.md)
 
 # Literature
 

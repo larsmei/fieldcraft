@@ -327,6 +327,9 @@ pub struct Prefs {
     /// Where History docks.
     #[serde(deserialize_with = "known_or_default")]
     pub history_dock: crate::shell::HistoryDock,
+    /// The title bar shows the Donate and the Discord pills ([`crate::links`]).
+    pub show_donate_button: bool,
+    pub show_discord_button: bool,
 }
 
 /// A preference as saved, or its default when this version cannot read it (a value a newer
@@ -353,6 +356,8 @@ impl Default for Prefs {
             browser_eye_left: false,
             status_bar: false,
             history_dock: crate::shell::HistoryDock::default(),
+            show_donate_button: true,
+            show_discord_button: true,
         }
     }
 }
@@ -549,8 +554,6 @@ pub enum Prompt {
     Delete(crate::menu::DeleteAsk),
     /// The first run asks once whether to share anonymous usage ([`crate::privacy`]).
     Consent,
-    /// Help › Settings: the privacy and update choices ([`crate::privacy`]).
-    Settings,
     /// An update is downloaded and verified: restart to finish it, or later ([`crate::updates`]).
     Update,
     /// The last run crashed (its new crash reports, newest first): report it, or not now.
@@ -1630,7 +1633,7 @@ pub fn show(app: &mut ModelApp, ctx: &egui::Context) {
             }
         }
         // Drawn by `crate::report::show` and `crate::privacy::show`.
-        Some(Prompt::Crashed(_) | Prompt::CrashReports(_) | Prompt::ReportBug | Prompt::Consent | Prompt::Settings | Prompt::Update) | None => {}
+        Some(Prompt::Crashed(_) | Prompt::CrashReports(_) | Prompt::ReportBug | Prompt::Consent | Prompt::Update) | None => {}
     }
 }
 
