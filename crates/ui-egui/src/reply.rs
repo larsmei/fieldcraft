@@ -189,7 +189,12 @@ pub fn done(command: &str, label: &str, params: &Value, v: &Value) -> String {
         c if c.starts_with("solve.") => Some(format!("Solved {step}", step = params["step"].as_str().unwrap_or("the step"))),
         _ => None,
     };
-    if let Some(line) = line {
+    if let Some(mut line) = line {
+        if command.starts_with("solve.")
+            && let Some(cost) = crate::results::reply_cost(v)
+        {
+            line = format!("{line} · {}", crate::results::cost_phrase(&cost));
+        }
         return line;
     }
     // A definition added, changed or deleted, by its kind and name.
@@ -900,6 +905,9 @@ fn solve_line(v: &Value, units: Option<&DisplaySystem>) -> String {
     if let Some(n) = v["dofs"].as_u64() {
         parts.push(format!("{} DOFs", count(n)));
     }
+    if let Some(cost) = crate::results::run_cost_value(v) {
+        parts.push(crate::results::cost_phrase(&cost));
+    }
     parts.join(", ")
 }
 
@@ -919,6 +927,18 @@ enum Row {
 fn solve_summary(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: Option<&DisplaySystem>) {
     let Some(m) = v.as_object() else { return value(ui, t, egui::Id::unique("fc_reply_solve"), v, 0) };
     let steady = m.get("frames").and_then(Value::as_u64).is_some_and(|n| n <= 1);
+    let mut shown: Vec<&str> = Vec::new();
+    if let Some(cost) = crate::results::run_cost_value(v) {
+        shown.push("run");
+        for (label, text) in crate::results::cost_lines(&cost) {
+            kit::row(ui, label, |ui| {
+                let line = kit::text(ui, &text, kit::Text::Cell);
+                if label == "Memory" {
+                    line.backing_on_hover_text("Peak resident memory of the process while this step ran, not only the factor.");
+                }
+            });
+        }
+    }
     let rows: [(&str, &str, Row); 18] = [
         ("step", "Step", Row::Text),
         ("max_displacement", "Max |U|", Row::Peak(Quantity::Length)),
@@ -939,7 +959,6 @@ fn solve_summary(ui: &mut egui::Ui, t: &Tokens, v: &Value, units: Option<&Displa
         ("elements", "Elements", Row::Count),
         ("frames", "Frames", Row::Count),
     ];
-    let mut shown: Vec<&str> = Vec::new();
     {
         for (key, label, row) in &rows {
             let Some(x) = m.get(*key).filter(|x| !x.is_null()) else { continue };

@@ -27,6 +27,7 @@ pub use cmd::update::enable_checks as enable_update_checks;
 /// Write an output (a picture, an export) where a user named, never over a model or design.
 pub use fieldcraft_io::fs::write_output;
 pub use fieldcraft_io::{Item as ViewItem, ItemKind};
+pub use machine::RunCost;
 pub mod history;
 pub mod linearise;
 pub mod path;
@@ -358,6 +359,9 @@ pub struct Session {
     /// The latest result of each solved step, by step name, with the revision it was solved at;
     /// [`Session::result`] hands out only those that describe the current state.
     results: BTreeMap<String, (u64, Arc<StepResult>)>,
+    /// Peak memory and wall-clock phases of a solve that ran in this process, by step name.
+    /// Not written to the file: a result opened from a file has none.
+    run_costs: BTreeMap<String, machine::RunCost>,
     /// The definition each solved step was solved from ([`fieldcraft_io::results::definition_hash`]): an edit
     /// that leaves it the same keeps the step's result current. Files keep it with the result.
     result_inputs: BTreeMap<String, [u8; 32]>,
@@ -769,6 +773,18 @@ impl Session {
     /// undoing back to the solved state makes it current again).
     pub fn result(&self, step: &str) -> Option<&Arc<StepResult>> {
         self.results.get(step).filter(|(revision, _)| *revision == self.revision).map(|(_, r)| r)
+    }
+
+    /// Peak memory and wall-clock phases of the last solve of `step` in this session.
+    ///
+    /// `None` when the step was not solved here (a result opened from a file has none). The cost
+    /// stays with that solve even after an edit makes the result stale.
+    pub fn run_cost(&self, step: &str) -> Option<machine::RunCost> {
+        self.run_costs.get(step).copied()
+    }
+
+    pub(crate) fn note_run_cost(&mut self, step: &str, cost: machine::RunCost) {
+        self.run_costs.insert(step.to_string(), cost);
     }
 
     /// The steps with a current result.

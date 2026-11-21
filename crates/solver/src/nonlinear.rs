@@ -1298,7 +1298,8 @@ pub fn solve_nonlinear(model: &Model, step: Option<&str>, limits: &Limits) -> Re
     };
     settings.validate()?;
     let Some(imperfection) = &settings.imperfection else { return solve_on(model, chosen.name.as_str(), limits, Vec::new()) };
-    let (perturbed, note) = imperfect(model, imperfection, limits)?;
+    // The buckling solve that seeds the imperfect geometry is part of this step's preparation.
+    let (perturbed, note) = fieldcraft_model::cost::suppress(|| imperfect(model, imperfection, limits))?;
     solve_on(&perturbed, chosen.name.as_str(), limits, vec![note])
 }
 
@@ -1484,6 +1485,7 @@ fn solve_on(model: &Model, step: &str, limits: &Limits, notes: Vec<String>) -> R
     };
     keep_frame(&mut history, 0.0, &vec![0.0; mesh.dofs()], &undeformed, false, &mut warnings)?;
     drop(undeformed);
+    fieldcraft_model::cost::prepared();
     let (q, lambda, last) = if let Some(arc) = &settings.arc_length {
         if problem.field.is_some() {
             return Err(Error::NotSupported(format!("temperatures in arc-length steps (step `{}`)", step.name)));
@@ -1623,6 +1625,7 @@ fn solve_on(model: &Model, step: &str, limits: &Limits, notes: Vec<String>) -> R
         ));
     }
     let contacts = problem.contacts.iter().zip(&evaluation.contact).map(|(c, s)| c.result(&mesh, s, run.augmentations)).collect();
+    fieldcraft_model::cost::solved();
     finish(&mesh, step, &red, &problem, u, lambda, evaluation, &run.committed, history, run.factor_entries, contacts, warnings)
 }
 

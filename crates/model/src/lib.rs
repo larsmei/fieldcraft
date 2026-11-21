@@ -51,6 +51,7 @@ pub mod materials;
 mod mesh;
 pub mod mesh_plans;
 pub mod nodal;
+pub mod cost;
 pub mod progress;
 pub mod pvt;
 pub mod relaxations;

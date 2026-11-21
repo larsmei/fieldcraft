@@ -404,6 +404,16 @@ fn rows(app: &mut ModelApp, plot: &Plot, ui: &mut egui::Ui, t: &Tokens) {
             }
         })
     });
+    if let Some(cost) = plot.cost {
+        for (label, text) in crate::results::cost_lines(&cost) {
+            kit::row(ui, label, |ui| {
+                let shown = kit::text(ui, &text, kit::Text::Cell);
+                if label == "Memory" {
+                    shown.backing_on_hover_text("Peak resident memory of the process while this step ran, not only the factor.");
+                }
+            });
+        }
+    }
     let shown = plot.view.contour.map_or("None", Field::label);
     kit::row(ui, "Contours", |ui| {
         kit::bounded_dropdown_menu(ui, "fc_results_field", shown, ui.available_width(), |ui| {

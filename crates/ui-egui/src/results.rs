@@ -17,6 +17,7 @@ use fieldcraft_engine::results::{Field, Kind, Pick, ResultsView, displacements, 
 use fieldcraft_engine::{Session, StepResult};
 use fieldcraft_render::contour::{Bands, banded, bands_color};
 use fieldcraft_render::{DisplayMesh, Scene, Vec3};
+use serde_json::Value;
 
 use crate::Style;
 use crate::theme::{Tokens, rgb};
@@ -74,6 +75,9 @@ pub struct Plot {
     pub unavailable: bool,
     /// The display units, which the numbers shown with the plot (the contour's too) are in.
     pub units: fieldcraft_model::DisplaySystem,
+    /// Peak memory and wall-clock phases of the solve, when this session ran it.
+    /// A result opened from a file has none.
+    pub cost: Option<fieldcraft_engine::RunCost>,
 }
 
 /// The part of a plot that does not change with the animation frame.
@@ -333,6 +337,7 @@ pub fn plot(session: &Session, base: &DisplayMesh, frame: Option<u64>, prepared:
         amplitude,
         unavailable: prepared.unavailable,
         units: session.units().clone(),
+        cost: session.run_cost(&view.step),
     })
 }
 
@@ -431,6 +436,110 @@ pub fn components(v: &[f64], scale: f64) -> String {
     v.iter().map(|c| number_in(*c, largest)).collect::<Vec<_>>().join(", ")
 }
 
+/// A phase's wall-clock time: milliseconds under a second, then seconds, then minutes.
+pub fn wall_clock(seconds: f64) -> String {
+    if !seconds.is_finite() || seconds < 0.0 {
+        return "—".into();
+    }
+    if seconds < 1.0 {
+        format!("{:.0} ms", seconds * 1000.0)
+    } else if seconds < 10.0 {
+        format!("{seconds:.2} s")
+    } else if seconds < 60.0 {
+        format!("{seconds:.1} s")
+    } else {
+        format!("{} min {:02} s", (seconds / 60.0) as u64, (seconds % 60.0) as u64)
+    }
+}
+
+/// A resident-set size, in binary units.
+pub fn ram(bytes: u64) -> String {
+    const KIB: f64 = 1024.0;
+    let b = bytes as f64;
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if b < KIB * KIB {
+        format_unit(b / KIB, "KB")
+    } else if b < KIB * KIB * KIB {
+        format_unit(b / (KIB * KIB), "MB")
+    } else {
+        format_unit(b / (KIB * KIB * KIB), "GB")
+    }
+}
+
+fn format_unit(v: f64, unit: &str) -> String {
+    if v < 10.0 { format!("{v:.1} {unit}") } else { format!("{v:.0} {unit}") }
+}
+
+/// The Results card's rows for one run, in order.
+pub fn cost_lines(cost: &fieldcraft_engine::RunCost) -> [(&'static str, String); 5] {
+    [
+        ("Memory", cost.ram_bytes.map(ram).unwrap_or_else(|| "—".into())),
+        ("Preparation", wall_clock(cost.prepare_secs)),
+        ("Solver", wall_clock(cost.solve_secs)),
+        ("Results", wall_clock(cost.results_secs)),
+        ("Wall clock", wall_clock(cost.total_secs())),
+    ]
+}
+
+/// One status phrase: `180 MB, prep 12 ms, solver 40 ms, results 8 ms`.
+pub fn cost_phrase(cost: &fieldcraft_engine::RunCost) -> String {
+    let times = format!(
+        "prep {}, solver {}, results {}",
+        wall_clock(cost.prepare_secs),
+        wall_clock(cost.solve_secs),
+        wall_clock(cost.results_secs)
+    );
+    match cost.ram_bytes {
+        Some(bytes) => format!("{}, {times}", ram(bytes)),
+        None => times,
+    }
+}
+
+fn cost_from_value(run: &Value) -> Option<fieldcraft_engine::RunCost> {
+    let prepare_secs = run.get("prepare_seconds")?.as_f64()?;
+    let solve_secs = run.get("solve_seconds")?.as_f64()?;
+    let results_secs = run.get("results_seconds")?.as_f64()?;
+    if ![prepare_secs, solve_secs, results_secs].iter().all(|t| t.is_finite() && *t >= 0.0) {
+        return None;
+    }
+    Some(fieldcraft_engine::RunCost {
+        ram_bytes: run.get("ram_bytes").and_then(Value::as_u64).filter(|b| *b > 0),
+        prepare_secs,
+        solve_secs,
+        results_secs,
+    })
+}
+
+/// The `run` object of one solve summary.
+pub fn run_cost_value(v: &Value) -> Option<fieldcraft_engine::RunCost> {
+    cost_from_value(v.get("run")?)
+}
+
+/// One solve's `run`, or the sum of a `solve.run` reply (the largest resident set of its steps).
+pub fn reply_cost(v: &Value) -> Option<fieldcraft_engine::RunCost> {
+    if v.get("run").is_some() {
+        return run_cost_value(v);
+    }
+    let steps = v.get("steps")?.as_array()?;
+    let mut prepare_secs = 0.0;
+    let mut solve_secs = 0.0;
+    let mut results_secs = 0.0;
+    let mut ram_bytes = None;
+    let mut any = false;
+    for step in steps {
+        let Some(cost) = step.get("summary").and_then(run_cost_value) else { continue };
+        any = true;
+        prepare_secs += cost.prepare_secs;
+        solve_secs += cost.solve_secs;
+        results_secs += cost.results_secs;
+        if let Some(bytes) = cost.ram_bytes {
+            ram_bytes = Some(ram_bytes.map_or(bytes, |have: u64| have.max(bytes)));
+        }
+    }
+    any.then_some(fieldcraft_engine::RunCost { ram_bytes, prepare_secs, solve_secs, results_secs })
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use serde_json::json;
@@ -439,6 +548,33 @@ pub(crate) mod tests {
     use fieldcraft_render::contour::band_color;
 
     use super::*;
+
+    #[test]
+    fn wall_clock_and_memory_read_in_plain_units() {
+        assert_eq!(wall_clock(0.012), "12 ms");
+        assert_eq!(wall_clock(1.25), "1.25 s");
+        assert_eq!(wall_clock(12.4), "12.4 s");
+        assert_eq!(wall_clock(125.0), "2 min 05 s");
+        assert_eq!(wall_clock(f64::NAN), "—");
+        assert_eq!(ram(512), "512 B");
+        assert_eq!(ram(1536), "1.5 KB");
+        assert_eq!(ram(10 * 1024), "10 KB");
+        assert_eq!(ram(512 * 1024 * 1024), "512 MB");
+        assert_eq!(ram(5 * 1024 * 1024 * 1024), "5.0 GB");
+        let one = json!({"run": {"ram_bytes": 2048, "prepare_seconds": 0.01, "solve_seconds": 1.5, "results_seconds": 0.2}});
+        let cost = run_cost_value(&one).unwrap();
+        assert_eq!(cost.ram_bytes, Some(2048));
+        assert_eq!(cost_phrase(&cost), "2.0 KB, prep 10 ms, solver 1.50 s, results 200 ms");
+        let both = json!({"steps": [
+            {"summary": {"run": {"ram_bytes": 1000, "prepare_seconds": 1.0, "solve_seconds": 2.0, "results_seconds": 3.0}}},
+            {"summary": {"run": {"ram_bytes": 3000, "prepare_seconds": 0.5, "solve_seconds": 0.25, "results_seconds": 0.25}}},
+        ]});
+        let summed = reply_cost(&both).unwrap();
+        assert_eq!(summed.ram_bytes, Some(3000));
+        assert!((summed.prepare_secs - 1.5).abs() < 1e-12);
+        assert!((summed.total_secs() - 7.0).abs() < 1e-12);
+        assert!(reply_cost(&json!({"steps": [{"summary": {"dofs": 1}}]})).is_none());
+    }
 
     fn plot_at(s: &Session, base: &DisplayMesh, frame: Option<u64>) -> Option<Plot> {
         let (view, result, _) = shown(s)?;

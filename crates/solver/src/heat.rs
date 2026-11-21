@@ -532,6 +532,7 @@ fn run(model: &Model, resolved: &Resolved, step: &Step, limits: &Limits) -> Resu
         Ok((expand(&q)?, chol.entries()))
     };
     let iterations = MAX_RADIATION_ITERATIONS.min(limits.max_newton_iterations);
+    fieldcraft_model::cost::prepared();
     let (times, frames, rate, radiated, factor_entries) = match transient.zip(c.as_ref()) {
         Some((tr, c)) => {
             let steps = tr.increments();
@@ -606,6 +607,7 @@ fn run(model: &Model, resolved: &Resolved, step: &Step, limits: &Limits) -> Resu
             (vec![0.0], vec![t], vec![0.0; n], radiated, entries)
         }
     };
+    fieldcraft_model::cost::solved();
     Ok(Solution { mesh, eqs, k, c, f, times, frames, rate, radiated, factor_entries, warnings })
 }
 
@@ -696,9 +698,12 @@ impl<'a> Newton<'a> {
 
 /// The steady temperatures of a coupled temperature–displacement step, by node label (sorted).
 pub(crate) fn temperatures(model: &Model, resolved: &Resolved, step: &Step, limits: &Limits) -> Result<(Vec<u32>, Vec<f64>)> {
-    let mut s = run(model, resolved, step, limits)?;
-    let t = s.frames.pop().unwrap_or_default();
-    Ok((s.mesh.labels, t))
+    // A coupled step's heat pass is part of that step's preparation, not a solve of its own.
+    fieldcraft_model::cost::suppress(|| {
+        let mut s = run(model, resolved, step, limits)?;
+        let t = s.frames.pop().unwrap_or_default();
+        Ok((s.mesh.labels, t))
+    })
 }
 
 /// The steady temperatures of a step's thermal conditions at the nodes `labels` (sorted), `None`

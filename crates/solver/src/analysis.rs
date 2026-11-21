@@ -451,6 +451,7 @@ pub(crate) fn static_on(setup: &Setup<'_>, limits: &Limits) -> Result<StaticResu
         return Err(Error::Invalid("every degree of freedom is prescribed; there is nothing to solve".into()));
     }
     let [kff] = red.reduce([&k])?;
+    fieldcraft_model::cost::prepared();
     let chol = factor_raw(&kff, limits).map_err(|e| factor_error(e, mesh, &red))?;
     drop(kff);
     let mut q = red.rhs(&f, &k);
@@ -459,6 +460,7 @@ pub(crate) fn static_on(setup: &Setup<'_>, limits: &Limits) -> Result<StaticResu
     if u.iter().any(|x| !x.is_finite()) {
         return Err(Error::Singular("the solution is not finite; the model is ill-conditioned".into()));
     }
+    fieldcraft_model::cost::solved();
     let (displacement, rotation, point_motion) = split(&u, mesh);
     let reactions = red.reactions(&k, &u, &f);
     let (reaction, reaction_moment, point_reaction) = split(&reactions, mesh);
@@ -669,6 +671,7 @@ pub fn solve_frequency(model: &Model, step: Option<&str>, options: &FrequencyOpt
     }
     let [kff, mff] = red.reduce([&k, &m])?;
     drop((k, m));
+    fieldcraft_model::cost::prepared();
     let shifted = |s: f64| -> Result<SpdFactor> { factor_raw(&kff.add_scaled(-s, &mff)?, limits).map_err(|e| factor_error(e, &mesh, &red)) };
     let (shift, chol) = match options.shift {
         Some(s) => (s, shifted(s)?),
@@ -697,6 +700,7 @@ pub fn solve_frequency(model: &Model, step: Option<&str>, options: &FrequencyOpt
     let max_basis = lanczos_basis(limits, neq);
     let op = ShiftInvert { m: &mff, factor: &chol };
     let pairs = lanczos(&op, shift, wanted, BLOCK, max_basis, TOLERANCE)?;
+    fieldcraft_model::cost::solved();
     // Participation: Γ_d = φᵀ M r_d with r_d the unit translation along d on the free equations
     // (mesh and reference point translations).
     let directions: Vec<Option<usize>> = red.eq_dof.iter().map(|dof| mesh.kind(*dof).and_then(DofKind::direction)).collect();
