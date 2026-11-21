@@ -10,7 +10,7 @@
 //! 3. **Ordering** ([`ordering`]): nested dissection of the nodes; the free degrees of freedom
 //!    are numbered in that order and the prescribed ones eliminated (u_p moved to the right-hand
 //!    side), with no penalty numbers.
-//! 4. **Solution** ([`cholesky`]): sparse Cholesky; reactions K u − f at the prescribed degrees
+//! 4. **Solution** ([`cholesky`], or the optional faer kernel in [`spd`]): sparse Cholesky; reactions K u − f at the prescribed degrees
 //!    of freedom; stresses at the integration points, extrapolated and averaged at the nodes, and
 //!    von Mises. Frequency analysis ([`eigen`]) runs shift-invert block Lanczos on the same
 //!    kind of factorization. Indefinite matrices (tangents past a limit point, strained mixed
@@ -39,6 +39,7 @@ pub mod ldlt;
 pub mod nonlinear;
 pub mod ordering;
 pub mod sparse;
+pub mod spd;
 pub mod system;
 pub mod tie;
 
@@ -90,6 +91,20 @@ impl Error {
     }
 }
 
+/// Which Cholesky factorization a definite system uses.
+///
+/// [`FactorMethod::Native`] is the default: FieldCraft's own supernodal factor, the same bits on
+/// every thread count and platform. [`FactorMethod::Faer`] factors the same nested-dissection
+/// matrix with faer's supernodal kernel. It is faster on large three-dimensional models and is
+/// not bit-identical across machines, because faer picks SIMD kernels at run time. A build
+/// without the `faer` feature (the browser) refuses it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FactorMethod {
+    #[default]
+    Native,
+    Faer,
+}
+
 /// Caps on the size of a solution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Limits {
@@ -103,6 +118,8 @@ pub struct Limits {
     /// radiation solve (the steady one or one increment's, at most
     /// [`heat::MAX_RADIATION_ITERATIONS`]).
     pub max_newton_iterations: usize,
+    /// Cholesky kernel. Indefinite LDLᵀ (a buckling operator, a non-positive tangent) stays native.
+    pub factor: FactorMethod,
 }
 
 impl Limits {
@@ -119,6 +136,7 @@ impl Default for Limits {
             max_factor_entries: Limits::MAX_FACTOR_ENTRIES,
             max_lanczos_vectors: Limits::MAX_LANCZOS_VECTORS,
             max_newton_iterations: Limits::MAX_NEWTON_ITERATIONS,
+            factor: FactorMethod::Native,
         }
     }
 }

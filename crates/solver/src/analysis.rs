@@ -11,17 +11,18 @@ use serde::Serialize;
 
 use fieldcraft_parallel as parallel;
 
-use crate::cholesky::{Factor, FactorError, UpperColumns};
+use crate::cholesky::{FactorError, UpperColumns};
 use crate::constraints::{Budget, Reduction, coupling_rows, symmetry_rows};
 use crate::eigen::{Operator, Wanted, lanczos};
-use crate::ldlt::{Kind, Symmetric};
+use crate::ldlt::{Kind, LdltFactor, Symmetric};
 use crate::ordering::fill_reducing_order;
 use crate::sparse::{Csr, NodeGraph, add_block, add_diagonal, add_scalar};
+use crate::spd::{self, SpdFactor};
 use crate::system::{
     InitialState, Mesh, Structural, StructuralKernel, add_thermal_loads, inelastic_warnings, loads, prescribed, structural_body_forces,
     temperature_loads, translation_block,
 };
-use crate::{Error, Limits, Result};
+use crate::{Error, FactorMethod, Limits, Result};
 
 /// Size and effort of a solution.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, serde::Deserialize)]
@@ -269,13 +270,27 @@ pub(crate) fn assemble(mesh: &Mesh, graph: &NodeGraph, mass: Option<MassKind>) -
 }
 
 /// Factor a free-dof matrix; a singular pivot is reported as the free-dof column it hit.
-pub(crate) fn factor_raw(a: &Csr, limits: &Limits) -> std::result::Result<Factor, FactorError> {
-    Factor::new(&UpperColumns::from_symmetric(a), limits.max_factor_entries)
+pub(crate) fn factor_raw(a: &Csr, limits: &Limits) -> std::result::Result<SpdFactor, FactorError> {
+    spd::factor(a, limits)
 }
 
 /// Factor a free-dof matrix by Cholesky, LDLᵀ, or Cholesky with LDLᵀ when it is not positive
 /// definite ([`Kind`]).
+///
+/// `factor: faer` uses faer's supernodal kernel for a definite (or auto, while it stays definite)
+/// matrix. The matrix is already in nested-dissection order. An auto matrix that is not positive
+/// definite falls back to the native LDLᵀ, which does not share faer's symbolic factorization.
+/// An indefinite factorization is always native.
 pub(crate) fn factor_symmetric(a: &Csr, limits: &Limits, kind: Kind) -> std::result::Result<Symmetric, FactorError> {
+    if limits.factor == FactorMethod::Faer && kind != Kind::Indefinite {
+        return match spd::factor(a, limits) {
+            Ok(f) => Ok(Symmetric::Cholesky(f)),
+            Err(FactorError::NotPositiveDefinite { .. }) if kind == Kind::Auto => {
+                LdltFactor::new(&UpperColumns::from_symmetric(a), limits.max_factor_entries).map(Symmetric::Indefinite)
+            }
+            Err(e) => Err(e),
+        };
+    }
     Symmetric::new(&UpperColumns::from_symmetric(a), limits.max_factor_entries, kind)
 }
 
@@ -287,6 +302,7 @@ pub(crate) fn factor_error(e: FactorError, mesh: &Mesh, reduction: &Reduction) -
         FactorError::OutOfMemory { entries } => Error::Limit(format!("not enough memory for the factorization ({entries} entries)")),
         FactorError::Internal(what) => Error::Internal(what),
         FactorError::Cancelled => Error::Model(fieldcraft_model::Error::Cancelled),
+        FactorError::Unavailable => spd::unavailable(),
         FactorError::NotPositiveDefinite { column } => {
             let at = reduction.eq_dof.get(column).map_or_else(|| "an unknown degree of freedom".to_string(), |d| mesh.describe_dof(*d));
             Error::Singular(format!(
@@ -573,7 +589,7 @@ pub(crate) fn static_on(setup: &Setup<'_>, limits: &Limits) -> Result<StaticResu
 
 struct ShiftInvert<'a> {
     m: &'a Csr,
-    factor: &'a Factor,
+    factor: &'a SpdFactor,
 }
 
 impl Operator for ShiftInvert<'_> {
@@ -653,7 +669,7 @@ pub fn solve_frequency(model: &Model, step: Option<&str>, options: &FrequencyOpt
     }
     let [kff, mff] = red.reduce([&k, &m])?;
     drop((k, m));
-    let shifted = |s: f64| -> Result<Factor> { factor_raw(&kff.add_scaled(-s, &mff)?, limits).map_err(|e| factor_error(e, &mesh, &red)) };
+    let shifted = |s: f64| -> Result<SpdFactor> { factor_raw(&kff.add_scaled(-s, &mff)?, limits).map_err(|e| factor_error(e, &mesh, &red)) };
     let (shift, chol) = match options.shift {
         Some(s) => (s, shifted(s)?),
         None => match factor_raw(&kff, limits) {

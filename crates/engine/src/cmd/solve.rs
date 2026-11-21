@@ -11,8 +11,8 @@ use fieldcraft_model::FluidDomain;
 use fieldcraft_model::units::Quantity;
 use fieldcraft_parallel as parallel;
 use fieldcraft_solver::{
-    FrequencyOptions, Limits, Location, MassKind, StaticResult, StepResult as ImplicitResult, solve_buckle, solve_frequency, solve_heat,
-    solve_nonlinear, solve_static,
+    FactorMethod, FrequencyOptions, Limits, Location, MassKind, StaticResult, StepResult as ImplicitResult, solve_buckle, solve_frequency,
+    solve_heat, solve_nonlinear, solve_static,
 };
 use serde_json::{Value, json};
 
@@ -33,7 +33,7 @@ pub const RUN: CommandSpec = CommandSpec {
 pub const STATIC: CommandSpec = CommandSpec {
     id: "solve.static",
     label: "Solve Static Step",
-    params: r#"{"step": "Load", "max_dofs": 6000000, "max_factor_entries": 400000000, "threads": 8} — solves a linear static or coupled temperature–displacement step (the only one when `step` is left out) and keeps the result in the session; `max_dofs` may only be lowered; `max_factor_entries` defaults to 400000000 and may be deliberately raised up to 2000000000 (8 bytes per factor value; indices and workspace are additional); `threads` (1 to 256, by default the session's: `FIELDCRAFT_THREADS` or the cores) changes only the time, never the result"#,
+    params: r#"{"step": "Load", "max_dofs": 6000000, "max_factor_entries": 400000000, "factor": "native|faer", "threads": 8} — solves a linear static or coupled temperature–displacement step (the only one when `step` is left out) and keeps the result in the session; `max_dofs` may only be lowered; `max_factor_entries` defaults to 400000000 and may be deliberately raised up to 2000000000 (8 bytes per factor value; indices and workspace are additional); `factor` is `native` (default: FieldCraft's own Cholesky, the same bits on every machine) or `faer` (faer's supernodal Cholesky of the same nested-dissection matrix, faster on large three-dimensional models; rounding depends on the CPU and the thread count and is not bit-identical; a build without the kernel, including the browser, refuses it; indefinite LDLᵀ stays native); `threads` (1 to 256, by default the session's: `FIELDCRAFT_THREADS` or the cores) changes only the time, never the result of a native factorization"#,
     form: Some(super::forms::SOLVE_STATIC),
     kind: CommandKind::Model,
     requires: &[Requirement::Analysable, Requirement::ElementMaterial, Requirement::ElementSection, Requirement::Step],
@@ -43,7 +43,7 @@ pub const STATIC: CommandSpec = CommandSpec {
 pub const NONLINEAR: CommandSpec = CommandSpec {
     id: "solve.nonlinear",
     label: "Solve Nonlinear Static Step",
-    params: r#"{"step": "Inflate", "max_dofs": 6000000, "max_factor_entries": 400000000, "max_newton_iterations": 100000, "threads": 8} — solves a nonlinear static step (the only one when `step` is left out) in load increments with Newton–Raphson iterations and keeps the result in the session: the final displacements, reactions, Cauchy stresses and logarithmic strains (small strains without nonlinear geometry), the equivalent plastic strain of plastic materials (the largest in the summary), every increment's load factor, iterations and residuals (force, displacement and energy, relative to their tolerances' scales), and a frame per converged increment (its displacements, reactions and contact states, and its nodal stresses when the step's `output` requests stress, for results.frame), and with contact pairs (interaction.contact.pair: mortar contact by augmented Lagrangian, Coulomb friction by a return map) each contact's force, normal force, largest pressure, closed and slipping nodes, deepest penetration and augmentations (solve.probe gives each secondary node's pressure, gap and status, and with friction its shear traction and slip); `max_dofs` and `max_newton_iterations` may only be lowered (the latter over the whole step); `max_factor_entries` and `threads` as for solve.static"#,
+    params: r#"{"step": "Inflate", "max_dofs": 6000000, "max_factor_entries": 400000000, "max_newton_iterations": 100000, "threads": 8} — solves a nonlinear static step (the only one when `step` is left out) in load increments with Newton–Raphson iterations and keeps the result in the session: the final displacements, reactions, Cauchy stresses and logarithmic strains (small strains without nonlinear geometry), the equivalent plastic strain of plastic materials (the largest in the summary), every increment's load factor, iterations and residuals (force, displacement and energy, relative to their tolerances' scales), and a frame per converged increment (its displacements, reactions and contact states, and its nodal stresses when the step's `output` requests stress, for results.frame), and with contact pairs (interaction.contact.pair: mortar contact by augmented Lagrangian, Coulomb friction by a return map) each contact's force, normal force, largest pressure, closed and slipping nodes, deepest penetration and augmentations (solve.probe gives each secondary node's pressure, gap and status, and with friction its shear traction and slip); `max_dofs` and `max_newton_iterations` may only be lowered (the latter over the whole step); `max_factor_entries`, `threads` and `factor` as for solve.static"#,
     form: Some(super::forms::SOLVE_NONLINEAR),
     kind: CommandKind::Model,
     requires: &[Requirement::Analysable, Requirement::ElementMaterial, Requirement::ElementSection, Requirement::Step],
@@ -53,7 +53,7 @@ pub const NONLINEAR: CommandSpec = CommandSpec {
 pub const HEAT: CommandSpec = CommandSpec {
     id: "solve.heat",
     label: "Solve Heat Transfer Step",
-    params: r#"{"step": "Heat", "max_dofs": 6000000, "max_factor_entries": 400000000, "threads": 8} — steady or transient heat conduction of a heat transfer step (the only one when `step` is left out): temperatures, heat flux and the heat flow at prescribed temperatures, kept in the session; `max_dofs` may only be lowered; `max_factor_entries` and `threads` as for solve.static"#,
+    params: r#"{"step": "Heat", "max_dofs": 6000000, "max_factor_entries": 400000000, "threads": 8} — steady or transient heat conduction of a heat transfer step (the only one when `step` is left out): temperatures, heat flux and the heat flow at prescribed temperatures, kept in the session; `max_dofs` may only be lowered; `max_factor_entries`, `threads` and `factor` as for solve.static"#,
     form: Some(super::forms::SOLVE_STATIC),
     kind: CommandKind::Model,
     requires: &[Requirement::Analysable, Requirement::ElementMaterial, Requirement::ElementSection, Requirement::Step],
@@ -63,7 +63,7 @@ pub const HEAT: CommandSpec = CommandSpec {
 pub const FREQUENCY: CommandSpec = CommandSpec {
     id: "solve.frequency",
     label: "Solve Frequency Step",
-    params: r#"{"step": "Modes", "mass": "consistent|lumped", "shift": 0.0, "max_dofs": 6000000, "max_factor_entries": 400000000, "max_iterations": 3000, "threads": 8} — natural frequencies and mode shapes of a frequency step (its modes and range); `max_iterations` caps the Lanczos vectors; the result stays in the session; `max_factor_entries` and `threads` as for solve.static"#,
+    params: r#"{"step": "Modes", "mass": "consistent|lumped", "shift": 0.0, "max_dofs": 6000000, "max_factor_entries": 400000000, "max_iterations": 3000, "threads": 8} — natural frequencies and mode shapes of a frequency step (its modes and range); `max_iterations` caps the Lanczos vectors; the result stays in the session; `max_factor_entries`, `threads` and `factor` as for solve.static"#,
     form: Some(super::forms::SOLVE_FREQUENCY),
     kind: CommandKind::Model,
     requires: &[Requirement::Analysable, Requirement::ElementMaterial, Requirement::ElementSection, Requirement::Step],
@@ -73,7 +73,7 @@ pub const FREQUENCY: CommandSpec = CommandSpec {
 pub const BUCKLE: CommandSpec = CommandSpec {
     id: "solve.buckle",
     label: "Solve Buckling Step",
-    params: r#"{"step": "Buckle", "max_dofs": 6000000, "max_factor_entries": 400000000, "max_iterations": 3000, "threads": 8} — linear buckling of a buckling step (the only one when `step` is left out): the step's loads as a linear preload, then the lowest load factors λ with (K + λ K_σ) φ = 0 and their mode shapes (largest component 1), or those above the step's shift (whose LDLᵀ factor counts the load factors below it); negative load factors found are reported; the result stays in the session and its modes display like frequency modes; `max_factor_entries` and `threads` as for solve.static"#,
+    params: r#"{"step": "Buckle", "max_dofs": 6000000, "max_factor_entries": 400000000, "max_iterations": 3000, "threads": 8} — linear buckling of a buckling step (the only one when `step` is left out): the step's loads as a linear preload, then the lowest load factors λ with (K + λ K_σ) φ = 0 and their mode shapes (largest component 1), or those above the step's shift (whose LDLᵀ factor counts the load factors below it); negative load factors found are reported; the result stays in the session and its modes display like frequency modes; `max_factor_entries`, `threads` and `factor` as for solve.static"#,
     form: Some(super::forms::SOLVE_BUCKLE),
     kind: CommandKind::Model,
     requires: &[Requirement::Analysable, Requirement::ElementMaterial, Requirement::ElementSection, Requirement::Step],
@@ -182,7 +182,20 @@ fn limits(p: &Value) -> Result<Limits> {
         },
         max_lanczos_vectors: cap(p, "max_iterations", Limits::MAX_LANCZOS_VECTORS)?,
         max_newton_iterations: cap(p, "max_newton_iterations", Limits::MAX_NEWTON_ITERATIONS)?,
+        factor: factor_method(p)?,
     })
+}
+
+/// `factor`: `native` (default) or `faer`. Absent and null are native.
+fn factor_method(p: &Value) -> Result<FactorMethod> {
+    match p.get("factor").filter(|v| !v.is_null()) {
+        None => Ok(FactorMethod::Native),
+        Some(v) => match v.as_str() {
+            Some("native") => Ok(FactorMethod::Native),
+            Some("faer") => Ok(FactorMethod::Faer),
+            _ => Err(EngineError::Params("`factor` must be \"native\" or \"faer\"".into())),
+        },
+    }
 }
 
 /// The node with the value that `better` prefers, as `{"node", "value"}`.
@@ -1805,6 +1818,46 @@ pub(crate) mod tests {
             let factor = &schema["properties"]["max_factor_entries"];
             assert_eq!(factor["minimum"], 1, "{id}: {factor}");
             assert_eq!(factor["maximum"], 2_000_000_000u64, "{id}: {factor}");
+        }
+    }
+
+    #[test]
+    fn faer_factor_is_optional_and_solves_the_same_cantilever() {
+        assert_eq!(limits(&json!({})).unwrap(), Limits::default());
+        assert_eq!(limits(&json!({"factor": "native"})).unwrap().factor, FactorMethod::Native);
+        assert_eq!(limits(&json!({"factor": "faer"})).unwrap().factor, FactorMethod::Faer);
+        assert!(limits(&json!({"factor": null})).unwrap().factor == FactorMethod::Native);
+        for bad in [json!("pardiso"), json!(1), json!(true)] {
+            let e = limits(&json!({"factor": bad})).unwrap_err().to_string();
+            assert!(e.contains("faer") && e.contains("native"), "{bad}: {e}");
+        }
+        for id in ["solve.static", "solve.nonlinear", "solve.heat", "solve.frequency", "solve.buckle"] {
+            let schema = crate::schema::json_schema(crate::find_command(id).unwrap().form.unwrap());
+            let choices = schema["properties"]["factor"]["enum"].as_array().unwrap();
+            assert!(choices.iter().any(|v| v == "native") && choices.iter().any(|v| v == "faer"), "{id}: {choices:?}");
+        }
+
+        let mut s = Session::default();
+        cantilever(&mut s);
+        let native = s.execute("solve.static", &json!({"factor": "native"})).unwrap();
+        assert!(native["max_displacement"]["value"].as_f64().unwrap().is_finite());
+        let faer = s.execute("solve.static", &json!({"factor": "faer"}));
+        #[cfg(feature = "faer")]
+        {
+            let faer = faer.unwrap();
+            let nd = native["max_displacement"]["value"].as_f64().unwrap();
+            let fd = faer["max_displacement"]["value"].as_f64().unwrap();
+            assert!((nd - fd).abs() < 1e-8, "native {nd} faer {fd}");
+            let reaction = |v: &Value| v["reaction_total"].as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect::<Vec<_>>();
+            for (a, b) in reaction(&native).iter().zip(&reaction(&faer)) {
+                assert!((a - b).abs() < 1e-6, "{native} vs {faer}");
+            }
+        }
+        #[cfg(not(feature = "faer"))]
+        {
+            let e = faer.unwrap_err().to_string();
+            assert!(e.contains("faer") && e.contains("not in this build"), "{e}");
+            assert_eq!(s.solved_steps().count(), 1, "a refused kernel leaves the native result");
         }
     }
 

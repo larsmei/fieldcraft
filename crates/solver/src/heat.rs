@@ -39,11 +39,12 @@ use fieldcraft_fem::mortar::area_vector;
 use fieldcraft_fem::{DofKind, DofLayout, DofSet};
 use fieldcraft_model::{ElementKind, Load, Model, Procedure, Resolved, STEFAN_BOLTZMANN, SectionKind, Step, TEMPERATURE_DOF};
 
-use crate::cholesky::{Factor, FactorError, UpperColumns};
+use crate::cholesky::FactorError;
 use crate::constraints::{Budget, Reduction, Row};
 use crate::contact::thickness;
 use crate::ordering::fill_reducing_order;
 use crate::sparse::{Csr, NodeGraph, add_block};
+use crate::spd::{self, SpdFactor};
 use crate::system::hold;
 use crate::tie::{TieFace, TieNodes, rows_of};
 use crate::{Error, Limits, Result, Stats};
@@ -405,12 +406,13 @@ fn prescribed(model: &Model, resolved: &Resolved, mesh: &HeatMesh, step: &Step) 
     Ok(out)
 }
 
-fn factor(a: &Csr, limits: &Limits, mesh: &HeatMesh, eqs: &Reduction) -> Result<Factor> {
-    Factor::new(&UpperColumns::from_symmetric(a), limits.max_factor_entries).map_err(|e| match e {
+fn factor(a: &Csr, limits: &Limits, mesh: &HeatMesh, eqs: &Reduction) -> Result<SpdFactor> {
+    spd::factor(a, limits).map_err(|e| match e {
         FactorError::TooLarge { entries, limit } => Error::factor_limit(entries, limit),
         FactorError::OutOfMemory { entries } => Error::Limit(format!("not enough memory for the factorization ({entries} entries)")),
         FactorError::Internal(what) => Error::Internal(what),
         FactorError::Cancelled => Error::Model(fieldcraft_model::Error::Cancelled),
+        FactorError::Unavailable => spd::unavailable(),
         FactorError::NotPositiveDefinite { column } | FactorError::Singular { column } => {
             let node = eqs.eq_dof.get(column).and_then(|d| mesh.layout.locate(*d)).map(|(slot, _)| slot);
             let label = node.and_then(|n| mesh.labels.get(n)).copied().unwrap_or(0);
@@ -552,7 +554,7 @@ fn run(model: &Model, resolved: &Resolved, step: &Step, limits: &Limits) -> Resu
             let mut previous = t.clone();
             let (mut frames, mut times) = (vec![t.clone()], vec![0.0]);
             let mut rhs = vec![0.0; n];
-            let mut entries = linear.as_ref().map_or(0, Factor::entries);
+            let mut entries = linear.as_ref().map_or(0, SpdFactor::entries);
             let mut newton = None;
             fieldcraft_model::progress::stage("Time increment", Some(steps as f64), "");
             for i in 1..=steps {

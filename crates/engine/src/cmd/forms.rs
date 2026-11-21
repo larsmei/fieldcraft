@@ -2760,12 +2760,16 @@ const MAX_FACTOR: Field = int("max_factor_entries", "Max factor entries", 1, sup
     .help("Cap on factor entries (8 bytes each): 400M by default; raise deliberately up to 2B (16 GB of values alone). Indices, workspace and other solver storage need additional memory.")
     .hint("400000000");
 const THREADS: Field = int("threads", "Threads", 1, 256).help("Threads to use; the session's setting when empty.").hint("the session's");
+const FACTOR: Field = choice("factor", "Factorization", &[("native", "Native"), ("faer", "faer supernodal")])
+    .help("Native is FieldCraft's own Cholesky, the same bits on every machine. faer factors that same nested-dissection matrix with a faster supernodal kernel; its rounding depends on the CPU and the thread count and is not bit-identical. The browser build has no faer kernel and refuses it. Indefinite LDLᵀ stays native.")
+    .hint("native");
 
-pub const SOLVE_STATIC: &[Field] = &[STEP, MAX_DOFS, MAX_FACTOR, THREADS];
+pub const SOLVE_STATIC: &[Field] = &[STEP, MAX_DOFS, MAX_FACTOR, FACTOR, THREADS];
 pub const SOLVE_NONLINEAR: &[Field] = &[
     STEP,
     MAX_DOFS,
     MAX_FACTOR,
+    FACTOR,
     int("max_newton_iterations", "Max Newton iterations", 1, 100_000).help("Cap on the Newton iterations over the whole step.").hint("100000"),
     THREADS,
 ];
@@ -2777,11 +2781,18 @@ pub const SOLVE_FREQUENCY: &[Field] = &[
     num("shift", "Shift", D::Eigenvalue).help("Look for frequencies near this eigenvalue (ω²); 0 finds the lowest.").hint("0"),
     MAX_DOFS,
     MAX_FACTOR,
+    FACTOR,
     int("max_iterations", "Max Lanczos vectors", 1, 3000).help("Cap on the Lanczos vectors.").hint("3000"),
     THREADS,
 ];
-pub const SOLVE_BUCKLE: &[Field] =
-    &[STEP, MAX_DOFS, MAX_FACTOR, int("max_iterations", "Max Lanczos vectors", 1, 3000).help("Cap on the Lanczos vectors.").hint("3000"), THREADS];
+pub const SOLVE_BUCKLE: &[Field] = &[
+    STEP,
+    MAX_DOFS,
+    MAX_FACTOR,
+    FACTOR,
+    int("max_iterations", "Max Lanczos vectors", 1, 3000).help("Cap on the Lanczos vectors.").hint("3000"),
+    THREADS,
+];
 pub const SOLVE_EXPLICIT: &[Field] = &[
     STEP,
     MAX_DOFS,

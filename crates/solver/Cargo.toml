@@ -8,12 +8,18 @@ license.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Optional numeric kernel. The nested-dissection order stays FieldCraft's; faer only factors it.
+# Off in the browser build: faer selects SIMD kernels at run time.
+faer = ["dep:faer"]
+
 [dependencies]
 fieldcraft-model = { workspace = true }
 fieldcraft-fem = { workspace = true }
 fieldcraft-parallel = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
+faer = { version = "0.24.4", optional = true, default-features = false, features = ["std", "sparse-linalg", "rayon"] }
 
 [dev-dependencies]
 # The validity gate, to prove the solvers and the meshers share one criterion.

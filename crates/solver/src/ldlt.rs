@@ -66,6 +66,7 @@ use crate::cholesky::{
     solve_supernodes, subtract, times_d,
 };
 use crate::sparse::Csr;
+use crate::spd::SpdFactor;
 
 /// (1 + √17)/8: the growth bound of Bunch and Kaufman.
 const ALPHA: f64 = 0.640_388_203_202_207_6;
@@ -433,22 +434,22 @@ pub enum Kind {
     Auto,
 }
 
-/// A factored symmetric matrix: Cholesky or LDLᵀ.
+/// A factored symmetric matrix: Cholesky ([`SpdFactor`], native or faer) or LDLᵀ.
 #[derive(Debug, Clone)]
 pub enum Symmetric {
-    Cholesky(Factor),
+    Cholesky(SpdFactor),
     Indefinite(LdltFactor),
 }
 
 impl Symmetric {
     pub fn new(a: &UpperColumns, max_entries: usize, kind: Kind) -> std::result::Result<Symmetric, FactorError> {
         match kind {
-            Kind::Definite => Factor::new(a, max_entries).map(Symmetric::Cholesky),
+            Kind::Definite => Factor::new(a, max_entries).map(SpdFactor::native).map(Symmetric::Cholesky),
             Kind::Indefinite => LdltFactor::new(a, max_entries).map(Symmetric::Indefinite),
             Kind::Auto => {
                 let symbolic = Symbolic::new(a, max_entries)?;
                 match Factor::from_symbolic(&symbolic) {
-                    Ok(f) => Ok(Symmetric::Cholesky(f)),
+                    Ok(f) => Ok(Symmetric::Cholesky(SpdFactor::native(f))),
                     Err(FactorError::NotPositiveDefinite { .. }) => LdltFactor::from_symbolic(&symbolic).map(Symmetric::Indefinite),
                     Err(e) => Err(e),
                 }
@@ -458,7 +459,7 @@ impl Symmetric {
 
     pub fn n(&self) -> usize {
         match self {
-            Symmetric::Cholesky(f) => f.n,
+            Symmetric::Cholesky(f) => f.n(),
             Symmetric::Indefinite(f) => f.n,
         }
     }
@@ -473,7 +474,7 @@ impl Symmetric {
     /// The inertia: a Cholesky factor's matrix is positive definite.
     pub fn inertia(&self) -> Inertia {
         match self {
-            Symmetric::Cholesky(f) => Inertia { positive: f.n, negative: 0 },
+            Symmetric::Cholesky(f) => Inertia { positive: f.n(), negative: 0 },
             Symmetric::Indefinite(f) => f.inertia(),
         }
     }

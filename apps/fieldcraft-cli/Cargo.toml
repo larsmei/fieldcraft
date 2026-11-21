@@ -9,7 +9,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-fieldcraft-engine = { workspace = true }
+fieldcraft-engine = { workspace = true, features = ["faer"] }
 fieldcraft-lbm-gpu = { workspace = true }
 fieldcraft-mesh-gpu = { workspace = true }
 fieldcraft-gpu = { workspace = true }
