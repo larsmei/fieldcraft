@@ -8,6 +8,11 @@ license.workspace = true
 [lints]
 workspace = true
 
+[features]
+# Desktop and the command-line build. Off in the browser: faer's SIMD kernels are not
+# bit-identical and are too large to ship there.
+faer = ["fieldcraft-solver/faer"]
+
 [dependencies]
 fieldcraft-model = { workspace = true }
 # Samples build their geometry from SolidCraft scripts (sample.rs).

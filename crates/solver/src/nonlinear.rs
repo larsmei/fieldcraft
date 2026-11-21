@@ -898,6 +898,7 @@ impl Run<'_> {
         let chol = match factor_raw(&kff, self.limits) {
             Ok(chol) => chol,
             Err(FactorError::Cancelled) => return Err(Failure::Fatal(fieldcraft_model::Error::Cancelled.into())),
+            Err(e @ FactorError::Unavailable) => return Err(Failure::Fatal(factor_error(e, self.problem.mesh, self.problem.red))),
             Err(_) => return Ok(None),
         };
         chol.solve(&mut dq)?;

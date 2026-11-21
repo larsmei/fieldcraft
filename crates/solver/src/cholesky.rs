@@ -234,6 +234,8 @@ pub enum FactorError {
     Internal(String),
     /// The command was cancelled ([`fieldcraft_model::progress`]) between supernodes.
     Cancelled,
+    /// `factor` asked for faer and this build does not include it.
+    Unavailable,
 }
 
 impl FactorError {

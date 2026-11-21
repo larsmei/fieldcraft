@@ -71,7 +71,11 @@ tolerance instead of bit-identity, as the GPU exception already does. *Updated 2
 parallelism task):* the factorization is now our own supernodal left-looking Cholesky (Liu–Ng–Peyton
 1993 fundamental supernodes on a postordered elimination tree, Ng–Peyton 1993, Rothberg–Gupta
 1994), multithreaded with a fixed operation order (below). Its rounding differs from the old
-up-looking factor in the last digits; every oracle fixture stays within its band.
+up-looking factor in the last digits; every oracle fixture stays within its band. *Updated
+2026-11-21:* the desktop and command-line builds offer the faer remedy as an optional kernel
+(`factor`: `native` or `faer`). faer factors the matrix nested dissection has already numbered
+and does not reorder it. The default remains the deterministic native factor. The browser build
+does not link faer. A faer solution is not bit-identical across machines.
 
 **Threads: rayon** (MIT OR Apache-2.0), in `fieldcraft-parallel` only (an L0 crate with no
 workspace dependencies; *decided 2026-10-13*). The solvers keep the bit-for-bit rule on any

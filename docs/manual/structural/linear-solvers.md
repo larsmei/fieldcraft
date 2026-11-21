@@ -30,6 +30,7 @@ threads with the same result as on one.
 | Field | Value | Default | Meaning |
 |---|---|---|---|
 | `max_factor_entries` | 1 to 32 000 000 000 on 64-bit (2 000 000 000 on 32-bit) | 400 000 000 | cap on the entries of the factor L (8 bytes each); may be raised deliberately for one solve |
+| `factor` | `native` or `faer` | `native` | Cholesky kernel. `faer` is faer's supernodal factorization of the same nested-dissection matrix (desktop and command line). Its rounding depends on the CPU and the thread count and is not bit-identical. The browser build refuses it. Indefinite LDLᵀ stays native |
 | `max_dofs` | 1 to 6 000 000 | 6 000 000 | cap on the model's unknowns; may only be lowered |
 | `max_iterations` | 1 to 3000 | 3000 | frequency and buckling: cap on the Lanczos vectors; may only be lowered |
 | `threads` | 1 to 256 | the session's (`FIELDCRAFT_THREADS` or the cores) | changes the time, never the result |
@@ -159,6 +160,11 @@ not to be positive definite, LDLᵀ on the same symbolic factorization.
 | Buckling without a shift | K | Cholesky (`Definite`) |
 | Buckling with a shift | K + σ K_σ | LDLᵀ (`Indefinite`), refined twice per solve |
 | Nonlinear static | the tangent | `Auto`: Cholesky, LDLᵀ when indefinite ([Nonlinear static](nonlinear-static.md)) |
+
+`factor: "faer"` replaces the Cholesky rows above with faer's supernodal factorization. The matrix
+is already numbered by nested dissection, and faer is told not to reorder it. LDLᵀ is unchanged.
+The rounding then depends on the CPU and the thread count and is not bit-identical across machines. The web build has
+no faer kernel and refuses the option; the default everywhere remains `native`.
 
 ![The rook pivot search](../../media/manual/linear-solvers-3.svg)
 
