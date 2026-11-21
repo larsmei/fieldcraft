@@ -126,14 +126,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eux
-          tag=v0.8.1-factor-256gb
+          tag=v0.8.1-faer
           gh release delete "$tag" --yes --cleanup-tag || true
-          gh release create "$tag" --target "${GITHUB_SHA}" --title "FieldCraft 0.8.1 (factor cap 256 GB)" --notes "$(cat <<'EOF'
-          Fork of [tangency-labs/fieldcraft](https://github.com/tangency-labs/fieldcraft) `develop` at 0.8.1, plus the 64-bit factor ceiling.
+          gh release create "$tag" --target "${GITHUB_SHA}" --title "FieldCraft 0.8.1 (256 GB factor, optional faer)" --notes "$(cat <<'EOF'
+          Fork of [tangency-labs/fieldcraft](https://github.com/tangency-labs/fieldcraft) `develop` at 0.8.1, plus the 64-bit factor ceiling and an optional faer Cholesky.
 
           The implicit solver's `max_factor_entries` ceiling is **32 000 000 000** on 64-bit (256 GB of factor values, 8 bytes each). The default stays 400 000 000. 32-bit and the web build keep the upstream ceiling of 2 000 000 000, because that count does not fit in a 32-bit `usize`.
 
           Set it on one solve, for example `solve.static` with `{"max_factor_entries": 32000000000}`. This does not reserve the memory.
+
+          Desktop and the command line can pass `{"factor": "faer"}` to factor the same nested-dissection matrix with faer's supernodal Cholesky. The default stays the deterministic native kernel. Indefinite LDLᵀ stays native. The browser build refuses `faer`. faer's rounding depends on the CPU and the thread count and is not bit-identical.
 
           - Linux x86_64: `.tar.gz`, `.AppImage`, `.deb`, `.rpm` (glibc 2.35+, Ubuntu 22.04). Unsigned.
           - Windows x64: `.zip` with `fieldcraft.exe` and `fieldcraft-cli.exe`. Unsigned.
@@ -156,5 +158,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -eux
-          tag=v0.8.1-factor-256gb
+          tag=v0.8.1-faer
           gh release upload "$tag" dist/* --clobber
