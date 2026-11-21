@@ -129,9 +129,9 @@ pub fn solve_buckle(model: &Model, step: Option<&str>, limits: &Limits) -> Resul
             s.label
         )));
     }
-    // The preload: the step solved as a linear static step.
+    // The preload: the step solved as a linear static step. Its own phases stay inside this one.
     let setup = Setup { model, resolved: &resolved, mesh: &mesh, step };
-    let preload = static_on(&setup, limits)?;
+    let preload = fieldcraft_model::cost::suppress(|| static_on(&setup, limits))?;
     let mut warnings: Vec<String> = preload.warnings.clone();
     let stresses: BTreeMap<u32, Vec<[f64; 6]>> = preload.elements.iter().map(|e| (e.label, e.points.iter().map(|p| p.stress).collect())).collect();
 
@@ -161,6 +161,7 @@ pub fn solve_buckle(model: &Model, step: Option<&str>, limits: &Limits) -> Resul
     let max_basis = lanczos_basis(limits, neq);
     let count = usize::try_from(modes).unwrap_or(usize::MAX).min(neq);
     let sigma = shift.unwrap_or(0.0);
+    fieldcraft_model::cost::prepared();
     let (pairs, entries, buckling) = if sigma == 0.0 {
         let factor = factor_symmetric(&kff, limits, Kind::Definite).map_err(|e| factor_error(e, &mesh, &red))?;
         let minus = Csr { val: gff.val.iter().map(|v| -v).collect(), ..gff.clone() };
@@ -185,6 +186,7 @@ pub fn solve_buckle(model: &Model, step: Option<&str>, limits: &Limits) -> Resul
         let pairs = lanczos(&op, sigma, Wanted { count, min, max }, BLOCK, max_basis, TOLERANCE)?;
         (pairs, factor.entries(), Buckling { negative: Vec::new(), shift: Some(sigma), below_shift: Some(below) })
     };
+    fieldcraft_model::cost::solved();
     if let Some(first) = buckling.negative.first() {
         warnings.push(format!("the reversed load buckles too: negative load factor {first:.6e} (and {} more found)", buckling.negative.len() - 1));
     }

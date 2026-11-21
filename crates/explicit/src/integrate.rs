@@ -373,6 +373,7 @@ pub fn solve_explicit(model: &Model, step: Option<&str>, limits: &Limits) -> Res
     let mut completed = true;
     let mut v_new = vec![0.0; n];
     fieldcraft_model::progress::stage("Time", Some(end), "");
+    fieldcraft_model::cost::prepared();
     loop {
         if increments.is_multiple_of(PROGRESS_EVERY) {
             fieldcraft_model::progress::count(t);
@@ -466,6 +467,7 @@ pub fn solve_explicit(model: &Model, step: Option<&str>, limits: &Limits) -> Res
             break;
         }
     }
+    fieldcraft_model::cost::solved();
     if !completed {
         if history.time.last() != Some(&t) {
             sample(&mut history, t, dt_half, energy, &u, &v_now, &reaction, &found);

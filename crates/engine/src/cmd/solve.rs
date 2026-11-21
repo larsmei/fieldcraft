@@ -193,10 +193,42 @@ fn extreme(values: impl Iterator<Item = (u32, f64)>, better: fn(f64, f64) -> boo
     }
 }
 
-/// [`parallel::with_threads`], the caller's progress reporter carried onto the pool's thread.
-fn with_threads<R: Send>(threads: usize, f: impl FnOnce() -> R + Send) -> R {
+/// [`parallel::with_threads`], the caller's progress reporter carried onto the pool's thread,
+/// with the wall-clock phases and the peak resident set of the run.
+fn timed<T: Send, E: Send>(
+    threads: usize,
+    f: impl FnOnce() -> std::result::Result<T, E> + Send,
+) -> std::result::Result<(T, crate::machine::RunCost), E> {
     let progress = fieldcraft_model::progress::current();
-    parallel::with_threads(threads, move || fieldcraft_model::progress::scoped(progress, f))
+    parallel::with_threads(threads, move || {
+        fieldcraft_model::progress::scoped(progress, || {
+            let guard = fieldcraft_model::cost::Guard::install();
+            let watch = crate::machine::RamWatch::start();
+            let value = f()?;
+            let phases = guard.finish();
+            let ram_bytes = watch.peak();
+            Ok((
+                value,
+                crate::machine::RunCost {
+                    ram_bytes,
+                    prepare_secs: phases.prepare_secs,
+                    solve_secs: phases.solve_secs,
+                    results_secs: phases.results_secs,
+                },
+            ))
+        })
+    })
+}
+
+/// Attach a solve's memory and wall-clock phases to its summary and remember them for the step.
+fn record_run(s: &mut Session, step: &str, summary: &mut Value, cost: crate::machine::RunCost) {
+    summary["run"] = json!({
+        "ram_bytes": cost.ram_bytes,
+        "prepare_seconds": cost.prepare_secs,
+        "solve_seconds": cost.solve_secs,
+        "results_seconds": cost.results_secs,
+    });
+    s.note_run_cost(step, cost);
 }
 
 fn run_all(s: &mut Session, _: &Value) -> Result<Value> {
@@ -275,9 +307,9 @@ fn run_static(s: &mut Session, p: &Value) -> Result<Value> {
     let limits = limits(p)?;
     let step = opt::<String>(p, "step")?;
     let model = &s.model;
-    let r = with_threads(threads(s, p)?, || solve_static(model, step.as_deref(), &limits))?;
+    let (r, cost) = timed(threads(s, p)?, || solve_static(model, step.as_deref(), &limits))?;
 
-    let summary = json!({
+    let mut summary = json!({
         "step": r.step,
         "dofs": r.stats.dofs,
         "equations": r.stats.equations,
@@ -295,6 +327,7 @@ fn run_static(s: &mut Session, p: &Value) -> Result<Value> {
         "max_temperature": r.temperature.as_ref().map(|t| largest(r.nodes.iter().copied().zip(t.iter().copied()))),
         "warnings": r.warnings,
     });
+    record_run(s, &r.step, &mut summary, cost);
     s.store_result(StepResult::Implicit(ImplicitResult::Static(r)));
     Ok(summary)
 }
@@ -303,9 +336,9 @@ fn run_nonlinear(s: &mut Session, p: &Value) -> Result<Value> {
     let limits = limits(p)?;
     let step = opt::<String>(p, "step")?;
     let model = &s.model;
-    let r = with_threads(threads(s, p)?, || solve_nonlinear(model, step.as_deref(), &limits))?;
+    let (r, cost) = timed(threads(s, p)?, || solve_nonlinear(model, step.as_deref(), &limits))?;
     let history = r.nonlinear.as_ref();
-    let summary = json!({
+    let mut summary = json!({
         "step": r.step,
         "dofs": r.stats.dofs,
         "equations": r.stats.equations,
@@ -338,6 +371,7 @@ fn run_nonlinear(s: &mut Session, p: &Value) -> Result<Value> {
         })).collect::<Vec<_>>(),
         "warnings": r.warnings,
     });
+    record_run(s, &r.step, &mut summary, cost);
     s.store_result(StepResult::Implicit(ImplicitResult::Static(r)));
     Ok(summary)
 }
@@ -346,9 +380,9 @@ fn run_heat(s: &mut Session, p: &Value) -> Result<Value> {
     let limits = limits(p)?;
     let step = opt::<String>(p, "step")?;
     let model = &s.model;
-    let r = with_threads(threads(s, p)?, || solve_heat(model, step.as_deref(), &limits))?;
+    let (r, cost) = timed(threads(s, p)?, || solve_heat(model, step.as_deref(), &limits))?;
     let t = r.temperature();
-    let summary = json!({
+    let mut summary = json!({
         "step": r.step,
         "dofs": r.stats.dofs,
         "equations": r.stats.equations,
@@ -362,6 +396,7 @@ fn run_heat(s: &mut Session, p: &Value) -> Result<Value> {
         "heat_flows": crate::results::heat_flows(&r, crate::units::si()),
         "warnings": r.warnings,
     });
+    record_run(s, &r.step, &mut summary, cost);
     s.store_result(StepResult::Implicit(ImplicitResult::Heat(r)));
     Ok(summary)
 }
@@ -372,8 +407,8 @@ fn run_frequency(s: &mut Session, p: &Value) -> Result<Value> {
     let mass = opt::<MassKind>(p, "mass")?.unwrap_or_default();
     let shift = opt::<f64>(p, "shift")?;
     let model = &s.model;
-    let r = with_threads(threads(s, p)?, || solve_frequency(model, step.as_deref(), &FrequencyOptions { mass, shift }, &limits))?;
-    let summary = json!({
+    let (r, cost) = timed(threads(s, p)?, || solve_frequency(model, step.as_deref(), &FrequencyOptions { mass, shift }, &limits))?;
+    let mut summary = json!({
         "step": r.step,
         "dofs": r.stats.dofs,
         "equations": r.stats.equations,
@@ -387,6 +422,7 @@ fn run_frequency(s: &mut Session, p: &Value) -> Result<Value> {
         })).collect::<Vec<_>>(),
         "warnings": r.warnings,
     });
+    record_run(s, &r.step, &mut summary, cost);
     s.store_result(StepResult::Implicit(ImplicitResult::Frequency(r)));
     Ok(summary)
 }
@@ -395,8 +431,8 @@ fn run_buckle(s: &mut Session, p: &Value) -> Result<Value> {
     let limits = limits(p)?;
     let step = opt::<String>(p, "step")?;
     let model = &s.model;
-    let r = with_threads(threads(s, p)?, || solve_buckle(model, step.as_deref(), &limits))?;
-    let summary = json!({
+    let (r, cost) = timed(threads(s, p)?, || solve_buckle(model, step.as_deref(), &limits))?;
+    let mut summary = json!({
         "step": r.step,
         "dofs": r.stats.dofs,
         "equations": r.stats.equations,
@@ -405,6 +441,7 @@ fn run_buckle(s: &mut Session, p: &Value) -> Result<Value> {
         "buckling": r.buckling,
         "warnings": r.warnings,
     });
+    record_run(s, &r.step, &mut summary, cost);
     s.store_result(StepResult::Implicit(ImplicitResult::Frequency(r)));
     Ok(summary)
 }
@@ -419,8 +456,9 @@ fn run_explicit(s: &mut Session, p: &Value) -> Result<Value> {
     };
     let step = opt::<String>(p, "step")?;
     let model = &s.model;
-    let r = with_threads(threads(s, p)?, || solve_explicit(model, step.as_deref(), &limits))?;
-    let summary = explicit_summary(&r);
+    let (r, cost) = timed(threads(s, p)?, || solve_explicit(model, step.as_deref(), &limits))?;
+    let mut summary = explicit_summary(&r);
+    record_run(s, &r.step, &mut summary, cost);
     s.store_result(StepResult::Explicit(r));
     Ok(summary)
 }
@@ -887,7 +925,7 @@ fn run_fluid(s: &mut Session, p: &Value) -> Result<Value> {
         None
     };
     let model = &s.model;
-    let mut r = with_threads(thread_count, || match checkpoint.as_mut() {
+    let (mut r, cost) = timed(thread_count, || match checkpoint.as_mut() {
         Some(store) => fieldcraft_lbm::solve::solve_fluid_checkpointed(model, step.as_deref(), &obstacles, &limits, store),
         None => fieldcraft_lbm::solve_fluid_on(model, step.as_deref(), &obstacles, &limits, backend),
     })
@@ -907,6 +945,7 @@ fn run_fluid(s: &mut Session, p: &Value) -> Result<Value> {
     if let Some(n) = &chosen.notice {
         summary["notice"] = json!(n);
     }
+    record_run(s, &r.step, &mut summary, cost);
     // The bounded diagnostics belong to this command reply; the legacy results format
     // does not encode them. Keep stored results identical before and after save/open.
     r.stats.validity = None;
@@ -1735,6 +1774,15 @@ pub(crate) mod tests {
         let journal = s.journal.len();
         let r = s.execute("solve.static", &json!({})).unwrap();
         assert_eq!(r["step"], "Bend");
+        let run = &r["run"];
+        for key in ["prepare_seconds", "solve_seconds", "results_seconds"] {
+            let t = run[key].as_f64().unwrap();
+            assert!(t.is_finite() && t >= 0.0, "{key} = {t} in {run}");
+        }
+        let phases = run["prepare_seconds"].as_f64().unwrap() + run["solve_seconds"].as_f64().unwrap() + run["results_seconds"].as_f64().unwrap();
+        assert!(phases > 0.0 && run["solve_seconds"].as_f64().unwrap() > 0.0, "the solver phase was not marked: {run}");
+        assert!(run["ram_bytes"].as_u64().is_some_and(|b| b > 0), "{run}");
+        assert_eq!(s.run_cost("Bend").map(|c| c.prepare_secs), run["prepare_seconds"].as_f64());
         // Euler–Bernoulli P L³ / (3 E I) = 4, plus shear; the clamp and one element through the
         // depth keep it within a few percent.
         let d = r["max_displacement"]["value"].as_f64().unwrap();
@@ -1808,6 +1856,14 @@ pub(crate) mod tests {
         }
     }
 
+    /// The result without the run's memory and wall-clock times, which differ from one run to the next.
+    fn without_run(mut v: Value) -> Value {
+        if let Some(o) = v.as_object_mut() {
+            o.remove("run");
+        }
+        v
+    }
+
     #[test]
     fn raised_factor_caps_solve_small_models_and_failures_keep_results() {
         let mut s = Session::default();
@@ -1833,7 +1889,9 @@ pub(crate) mod tests {
             let probe_params = json!({"step": step, "nodes": [6]});
             let probe = s.execute("solve.probe", &probe_params).unwrap();
             for entries in [400_000_001, 467_000_000, 2_000_000_000] {
-                assert_eq!(s.execute(command, &json!({"step": step, "max_factor_entries": entries})).unwrap(), expected);
+                let got = s.execute(command, &json!({"step": step, "max_factor_entries": entries})).unwrap();
+                assert!(got["run"]["prepare_seconds"].as_f64().is_some_and(|t| t.is_finite()), "{command}: {}", got["run"]);
+                assert_eq!(without_run(got), without_run(expected.clone()));
                 assert_eq!(s.execute("solve.probe", &probe_params).unwrap(), probe);
             }
             let before = s.model.clone();

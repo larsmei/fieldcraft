@@ -2890,7 +2890,9 @@ mod tests {
         let status = |app: &ModelApp| app.status.as_ref().map(|s| s.text.clone()).unwrap_or_default();
         assert_eq!(status(&app), "Opened the Cantilever sample");
         app.run("solve.run", json!({})).unwrap();
-        assert_eq!(status(&app), "Solved 2 steps");
+        let solved = status(&app);
+        assert!(solved.starts_with("Solved 2 steps · "), "{solved}");
+        assert!(solved.contains("prep ") && solved.contains("solver ") && solved.contains("results "), "{solved}");
         app.run("results.deformed", json!({"step": "Load", "show": true})).unwrap();
         assert_eq!(status(&app), "Showing Load deformed");
         app.run("results.deformed", json!({"step": "Load", "scale": 2})).unwrap();

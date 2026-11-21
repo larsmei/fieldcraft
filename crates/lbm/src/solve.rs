@@ -529,6 +529,7 @@ fn run_checkpointed(
             Ok(k)
         })?;
     }
+    fieldcraft_model::cost::prepared();
     while k < total && !finished {
         fieldcraft_model::progress::check()?;
         // Up to the next event: a history sample, a frame, a progress count.
@@ -639,6 +640,7 @@ fn run_checkpointed(
         }
     }
 
+    fieldcraft_model::cost::solved();
     let mut warnings = setup.warnings.clone();
     let steady = monitor.map(Monitor::report);
     if let Some(r) = &steady {

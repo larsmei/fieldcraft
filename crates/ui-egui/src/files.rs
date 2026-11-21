@@ -442,7 +442,7 @@ fn finished(command: &str, done: &str, took: &str, reply: &Value, units: &fieldc
         let first = kinds.next()?;
         kinds.all(|k| k == first).then_some(first)
     });
-    match (r["elements"].as_u64(), kind) {
+    let line = match (r["elements"].as_u64(), kind) {
         (Some(n), Some(kind)) if BACKGROUND.contains(&command) => {
             let least = |f: &dyn Fn(&Value) -> Option<f64>| bodies().filter_map(f).reduce(f64::min);
             let mut q = match (least(&|b| b["quality"]["mesh"]["min_dihedral"].as_f64()), least(&|b| b["quality"]["min_scaled_jacobian"].as_f64())) {
@@ -468,6 +468,10 @@ fn finished(command: &str, done: &str, took: &str, reply: &Value, units: &fieldc
         }
         _ if is_long(command) && !opens(command) => format!("{done} in {took}"),
         _ => done.to_string(),
+    };
+    match crate::results::reply_cost(r) {
+        Some(cost) => format!("{line} · {}", crate::results::cost_phrase(&cost)),
+        None => line,
     }
 }
 
@@ -2680,7 +2684,9 @@ pub(crate) mod tests {
         app.wait_loaded();
         assert_eq!(app.now, frozen);
         let status = app.status.clone().unwrap();
-        let took: f64 = status.text.rsplit(" in ").next().and_then(|t| t.trim_end_matches(" s").parse().ok()).unwrap_or(0.0);
+        // "Solved 2 steps in 1.2 s", then the run's memory and phases.
+        let head = status.text.split(" · ").next().unwrap_or(status.text.as_str());
+        let took: f64 = head.rsplit(" in ").next().and_then(|t| t.trim_end_matches(" s").parse().ok()).unwrap_or(0.0);
         assert!(status.text.starts_with("Solved ") && took >= 0.3, "{}", status.text);
     }
 

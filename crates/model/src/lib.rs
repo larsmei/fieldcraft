@@ -38,6 +38,7 @@ pub mod check;
 pub mod constraints;
 pub mod contact;
 mod convert;
+pub mod cost;
 pub mod datums;
 pub mod discrete;
 pub mod fluid_zones;
