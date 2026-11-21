@@ -2030,7 +2030,7 @@ checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 
 [[package]]
 name = "fieldcraft"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "eframe",
  "egui",
@@ -2055,7 +2055,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-cli"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-engine",
  "fieldcraft-gpu",
@@ -2071,7 +2071,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-decks"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-model",
  "serde_json",
@@ -2080,7 +2080,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-engine"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-decks",
  "fieldcraft-explicit",
@@ -2106,7 +2106,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-explicit"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-fem",
  "fieldcraft-model",
@@ -2117,7 +2117,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-fem"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-model",
  "serde",
@@ -2126,7 +2126,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-geometry"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-model",
  "quick-xml 0.42.0",
@@ -2145,7 +2145,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-gpu"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-render",
  "log",
@@ -2157,7 +2157,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-io"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-explicit",
  "fieldcraft-lbm",
@@ -2173,7 +2173,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-lbm"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-mesh",
  "fieldcraft-model",
@@ -2185,7 +2185,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-lbm-gpu"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-gpu",
  "fieldcraft-lbm",
@@ -2199,7 +2199,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-mcp"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-engine",
  "fieldcraft-gpu",
@@ -2211,7 +2211,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-mesh"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-model",
  "fieldcraft-parallel",
@@ -2225,7 +2225,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-mesh-gpu"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-gpu",
  "fieldcraft-mesh",
@@ -2235,7 +2235,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-model"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "libm",
  "serde",
@@ -2245,14 +2245,14 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-parallel"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "rayon",
 ]
 
 [[package]]
 name = "fieldcraft-render"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-model",
  "png",
@@ -2262,7 +2262,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-solver"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "faer",
  "fieldcraft-fem",
@@ -2275,7 +2275,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-testkit"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "fieldcraft-engine",
  "fieldcraft-geometry",
@@ -2287,7 +2287,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-ui-egui"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "egui",
  "egui-wgpu",
@@ -2313,7 +2313,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-update"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "flate2",
  "log",
@@ -2330,7 +2330,7 @@ dependencies = [
 
 [[package]]
 name = "fieldcraft-web"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "base64 0.23.1",
  "eframe",
@@ -7601,7 +7601,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "proc-macro2",
  "serde_json",

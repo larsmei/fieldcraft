@@ -1,4 +1,5 @@
-# Fork build: Linux x86_64 and Windows x64 packages with the 256 GB factor ceiling.
+# Fork release: Linux x86_64 and Windows x64.
+# The GitHub tag is v<workspace version>, and the package file names use that same version.
 # GitHub-hosted runners only (the upstream release workflow's Blacksmith runners are not
 # available on this fork). Packages are unsigned. macOS is not built here.
 name: Factor cap 256 GB
@@ -86,10 +87,16 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -eux
-          tag=v0.8.1-faer
+          version="$(awk '
+            /^\[/ { in_pkg = ($0 == "[workspace.package]") ; next }
+            in_pkg && $1 == "version" { gsub(/[" ]/, "", $3); print $3; exit }
+          ' Cargo.toml)"
+          test -n "$version"
+          tag="v${version}"
+          # Only this tag. Older releases (v0.8.1-factor-256gb, v0.8.1-faer) stay.
           gh release delete "$tag" --yes --cleanup-tag || true
-          gh release create "$tag" --target "${GITHUB_SHA}" --title "FieldCraft 0.8.1 (256 GB factor, optional faer)" --notes "$(cat <<'EOF'
-          Fork of [tangency-labs/fieldcraft](https://github.com/tangency-labs/fieldcraft) `develop` at 0.8.1, plus the 64-bit factor ceiling and an optional faer Cholesky.
+          gh release create "$tag" --target "${GITHUB_SHA}" --title "FieldCraft ${version}" --notes "$(cat <<'EOF'
+          Fork of [tangency-labs/fieldcraft](https://github.com/tangency-labs/fieldcraft) `develop`, packaged as this version. The package file names use the same version as this tag.
 
           The implicit solver's `max_factor_entries` ceiling is **32 000 000 000** on 64-bit (256 GB of factor values, 8 bytes each). The default stays 400 000 000. 32-bit and the web build keep the upstream ceiling of 2 000 000 000, because that count does not fit in a 32-bit `usize`.
 
